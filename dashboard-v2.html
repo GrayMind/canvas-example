@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>仪表盘</title>
+  </head>
+  <body>
+    <canvas id="dashboard"></canvas>
+    <script>
+      class Dashboard {
+        constructor(canvasId, options = {}) {
+          this.canvasId = canvasId;
+          this.options = options;
+        }
+
+        async init() {
+          // 获取宽高
+          const { width, height } = this.options;
+          this.config = {
+            centerX: width / 2, // 半圆的圆心-X
+            centerY: height, // 半圆的圆心-Y
+            outterRadius: 90, // 大半圆的半径
+            outterLineWidth: 20, // 大半圆的线条宽度
+            innerRadius: 50, // 小半圆的半径
+            ...this.options,
+          };
+          this.canvas = await this.createOffscreenCanvas();
+
+          if (this.canvas) {
+            this.ctx = this.canvas.getContext("2d");
+            this.ctx.translate(this.config.centerX, this.config.centerY);
+          }
+        }
+
+        createOffscreenCanvas() {
+          return new Promise((resolve) => {
+            // 若不是使用以后的 dom 结构，可以手动创建一个
+            const canvas = document.getElementById(this.canvasId);
+            canvas.width = this.config.width;
+            canvas.height = this.config.height;
+            resolve(canvas);
+          });
+        }
+
+        // 角度转弧度
+        degToRad(deg) {
+          return (Math.PI / 180) * deg;
+        }
+
+        draw(currentProgress, count) {
+          if (!this.canvas) {
+            return;
+          }
+
+          let pointerOffsetRad = this.degToRad(currentProgress);
+          // 做部分角度兼容
+          if (pointerOffsetRad < 0.15) {
+            pointerOffsetRad = 0.15;
+          }
+          if (pointerOffsetRad > Math.PI - 0.15) {
+            pointerOffsetRad = Math.PI - 0.15;
+          }
+
+          let pointerColor = "#D81D1D";
+          let maxPointerOffset = 0;
+          const colorList = [];
+          this.config.colorOptions.forEach((option) => {
+            if (currentProgress > option.max) {
+              // 配置中按照半圆顺时针方向角度计算，但是canvas中是按canvas原点的顺时针计算的，方向正好相反，需要做转换处理
+              const start = this.degToRad(option.max - 180);
+              const end = this.degToRad(option.min - 180);
+              colorList.push({
+                start: start,
+                end: end,
+                color: option.color,
+              });
+              // if (maxPointerOffset < option.max) {
+              //   maxPointerOffset = option.max;
+              //   pointerColor = option.color;
+              // }
+            } else if (currentProgress >= option.min) {
+              const start = this.degToRad(currentProgress - 180);
+              const end = this.degToRad(option.min - 180);
+              colorList.push({
+                start: start,
+                end: end,
+                color: option.color,
+              });
+              pointerColor = option.color;
+              // if (maxPointerOffset < option.max) {
+              //   maxPointerOffset = option.max;
+              // }
+            }
+          });
+
+          // 灰线
+          this.ctx.beginPath();
+          this.ctx.arc(
+            0,
+            0,
+            this.config.outterRadius,
+            this.degToRad(-180),
+            this.degToRad(0)
+          );
+          this.ctx.strokeStyle = "#DDDDDD";
+          this.ctx.lineWidth = this.config.outterLineWidth;
+          this.ctx.lineCap = "butt";
+          this.ctx.stroke();
+
+          // 颜色线段
+          for (let index = 0; index < colorList.length; index++) {
+            const option = colorList[index];
+            this.ctx.beginPath();
+            this.ctx.arc(
+              0,
+              0,
+              this.config.outterRadius,
+              option.start,
+              option.end,
+              true
+            );
+            this.ctx.strokeStyle = option.color;
+            this.ctx.lineWidth = this.config.outterLineWidth;
+            this.ctx.lineCap = "butt";
+            this.ctx.stroke();
+          }
+
+          // 分割线
+          const splitRad = this.degToRad(15);
+          const splitCount = 180 / 15;
+          this.ctx.save();
+          // 开始和结尾处不需要分割线
+          this.ctx.rotate(splitRad);
+          for (let index = 0; index < splitCount - 1; index++) {
+            this.ctx.beginPath();
+            this.ctx.lineWidth = 1;
+            // ctx.strokeStyle = 'red'
+            this.ctx.strokeStyle = "#ffffff";
+            this.ctx.lineCap = "butt";
+            this.ctx.moveTo(
+              -(this.config.outterRadius + this.config.outterLineWidth / 2),
+              0
+            );
+            this.ctx.lineTo(
+              -(this.config.outterRadius - this.config.outterLineWidth / 2),
+              0
+            );
+            this.ctx.stroke();
+            this.ctx.rotate(splitRad);
+          }
+          this.ctx.restore();
+
+          // 内部的半圆
+          this.ctx.beginPath();
+          this.ctx.arc(
+            0,
+            0,
+            this.config.innerRadius,
+            this.degToRad(-180),
+            this.degToRad(0)
+          );
+          this.ctx.strokeStyle = "#DDDDDD";
+          this.ctx.lineWidth = 1;
+          this.ctx.lineCap = "butt";
+          this.ctx.fillStyle = "#F9F9F9";
+          this.ctx.closePath();
+          this.ctx.stroke();
+          this.ctx.fill();
+
+          // 指针-三角
+          this.ctx.save();
+          this.ctx.rotate(pointerOffsetRad);
+
+          this.ctx.beginPath();
+          this.ctx.moveTo(-this.config.innerRadius, -10);
+          this.ctx.lineTo(-this.config.innerRadius, 10);
+          this.ctx.lineTo(-(this.config.innerRadius + 16), 0);
+          this.ctx.fillStyle = pointerColor;
+          this.ctx.fill();
+          this.ctx.restore();
+
+          // 指针-圆
+          this.ctx.save();
+          this.ctx.rotate(pointerOffsetRad);
+
+          this.ctx.beginPath();
+          this.ctx.arc(
+            -this.config.outterRadius,
+            0,
+            this.config.outterLineWidth / 2,
+            this.degToRad(0),
+            this.degToRad(360)
+          );
+          this.ctx.strokeStyle = pointerColor;
+          this.ctx.lineWidth = 8;
+          this.ctx.lineCap = "butt";
+          this.ctx.fillStyle = "#FFFFFF";
+          this.ctx.closePath();
+          this.ctx.stroke();
+          this.ctx.fill();
+          this.ctx.restore();
+
+          // 文字 - x条
+          this.ctx.textAlign = "center";
+          this.ctx.fillStyle = pointerColor;
+          this.ctx.font = "22px sans-serif";
+          this.ctx.fillText(`${count}条`, 0, -10);
+
+          // 文字 - 通过
+          this.ctx.textAlign = "right";
+          this.ctx.fillStyle = "#A4A4A4";
+          this.ctx.font = "22px sans-serif";
+          this.ctx.fillText("开始", -this.config.outterRadius - 15, -5);
+
+          // 文字 - 中间
+          this.ctx.textAlign = "center";
+          this.ctx.fillStyle = "#A4A4A4";
+          this.ctx.font = "22px sans-serif";
+          this.ctx.fillText(
+            "中间",
+            0,
+            -(this.config.outterRadius + this.config.outterLineWidth)
+          );
+
+          // 文字 - 拒绝
+          this.ctx.textAlign = "left";
+          this.ctx.fillStyle = "#A4A4A4";
+          this.ctx.font = "22px sans-serif";
+          this.ctx.fillText("结束", this.config.outterRadius + 15, -5);
+        }
+
+        toDataURL() {
+          if (!this.canvas) {
+            return null;
+          }
+          return this.canvas.toDataURL("image/png", 0.8);
+        }
+
+        clearRect() {
+          this.ctx.clearRect(
+            -this.config.centerX,
+            -this.config.centerY,
+            this.canvas.width,
+            this.canvas.height
+          );
+        }
+        destroy() {
+          this.canvas = null;
+          this.ctx = null;
+        }
+      }
+
+      const colorOptions = [
+        {
+          color: "#1BBE7C", // 绿色
+          min: 0,
+          max: 45,
+        },
+        {
+          color: "#FF881A", // 黄
+          min: 45,
+          max: 135,
+        },
+        {
+          color: "#D81D1D", // 红
+          min: 135,
+          max: 180,
+        },
+      ];
+      const dashboard = new Dashboard("dashboard", {
+        width: 300,
+        height: 128,
+        colorOptions,
+      });
+
+      let progress = 0;
+      function start() {
+        if (progress < 180) {
+          dashboard.clearRect();
+          progress++;
+          dashboard.draw(progress, 10);
+          window.requestAnimationFrame(start);
+        }
+      }
+
+      dashboard.init().then(() => {
+        start();
+        // this.src = this.dashboard.toDataURL();
+      });
+    </script>
+  </body>
+</html>

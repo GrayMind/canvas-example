@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>仪表盘</title>
+  </head>
+  <style>
+    body {
+      margin: 100px;
+    }
+  </style>
+  <body>
+    <canvas id="dashboard"></canvas>
+    <script>
+      const canvasWidth = 300; // canvas宽度
+      const canvasHeigth = 128; // canvas高度
+      const canvas = document.getElementById("dashboard");
+      canvas.width = canvasWidth;
+      canvas.height = canvasHeigth;
+      const ctx = canvas.getContext("2d");
+
+      const centerX = canvasWidth / 2; // 半圆的圆心-X
+      const centerY = canvasHeigth; // 半圆的圆心-Y
+      ctx.translate(centerX, centerY); // 转换坐标原点
+
+      const outterRadius = 90; // 大半圆的半径
+      const outterLineWidth = 20; // 大半圆的线条宽度
+      const innerRadius = 50; // 小半圆的半径
+
+      const colorConfig = [
+        {
+          color: "#1BBE7C", // 绿
+          start: -180,
+          end: -135,
+        },
+        {
+          color: "#FF881A", // 黄
+          start: -135,
+          end: -45,
+        },
+        {
+          color: "#D81D1D", // 红
+          start: -45,
+          end: 0,
+        },
+      ];
+      // 角度转弧度
+      function degToRad(deg) {
+        return (Math.PI / 180) * deg;
+      }
+
+      function draw(currentProgress) {
+        let pointerOffsetRad = degToRad(currentProgress + 180);
+        // 做部分角度兼容
+        if (pointerOffsetRad < 0.15) {
+          pointerOffsetRad = 0.15;
+        }
+        if (pointerOffsetRad > Math.PI - 0.15) {
+          pointerOffsetRad = Math.PI - 0.15;
+        }
+
+        let pointerColor = "#D81D1D";
+        let maxPointerOffset = 0;
+        const colorList = [];
+        colorConfig.forEach((option) => {
+          if (currentProgress > option.end) {
+            colorList.push(option);
+          } else if (currentProgress >= option.start) {
+            const start = option.start;
+            const end = currentProgress;
+            colorList.push({
+              start: start,
+              end: end,
+              color: option.color,
+            });
+            pointerColor = option.color;
+          }
+        });
+
+        // 灰线
+        ctx.beginPath();
+        ctx.arc(0, 0, outterRadius, degToRad(-180), degToRad(0));
+        ctx.strokeStyle = "#DDDDDD";
+        ctx.lineWidth = outterLineWidth;
+        ctx.lineCap = "butt"; // 线段末端以方形结束
+        ctx.stroke();
+
+        // 颜色线段
+        for (let index = 0; index < colorList.length; index++) {
+          const option = colorList[index];
+          ctx.beginPath();
+          ctx.arc(
+            0,
+            0,
+            outterRadius,
+            degToRad(option.start),
+            degToRad(option.end)
+          );
+          ctx.strokeStyle = option.color;
+          ctx.lineWidth = outterLineWidth;
+          ctx.lineCap = "butt";
+          ctx.stroke();
+        }
+
+        // 辅助线
+        // ctx.beginPath();
+        // ctx.arc(0, 0, outterRadius, degToRad(-180), degToRad(0));
+        // ctx.strokeStyle = "#000";
+        // ctx.lineWidth = 1;
+        // ctx.lineCap = "butt"; // 线段末端以方形结束
+        // ctx.stroke();
+
+        // 分割线
+        const splitRad = this.degToRad(15);
+        const splitCount = 180 / 15;
+        ctx.save();
+        // 开始和结尾处不需要分割线
+        ctx.rotate(splitRad);
+        for (let index = 0; index < splitCount - 1; index++) {
+          ctx.beginPath();
+          ctx.lineWidth = 1;
+          // ctx.strokeStyle = 'red'
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineCap = "butt";
+          ctx.moveTo(-(outterRadius + outterLineWidth / 2), 0);
+          ctx.lineTo(-(outterRadius - outterLineWidth / 2), 0);
+          ctx.stroke();
+          ctx.rotate(splitRad);
+        }
+        ctx.restore();
+
+        // 内部的半圆
+        ctx.beginPath();
+        ctx.arc(0, 0, innerRadius, degToRad(-180), degToRad(0));
+        ctx.strokeStyle = "#DDDDDD";
+        ctx.lineWidth = 1;
+        ctx.lineCap = "butt";
+        ctx.fillStyle = "#F9F9F9";
+        ctx.closePath();
+        ctx.stroke();
+        ctx.fill();
+
+        // 三角形
+        ctx.save();
+        ctx.rotate(pointerOffsetRad);
+
+        ctx.beginPath();
+        ctx.moveTo(-innerRadius, -10);
+        ctx.lineTo(-innerRadius, 10);
+        ctx.lineTo(-(innerRadius + 16), 0);
+        ctx.fillStyle = pointerColor;
+        ctx.fill();
+        ctx.restore();
+
+        // 指针-圆
+        ctx.save();
+        ctx.rotate(pointerOffsetRad);
+
+        ctx.beginPath();
+        ctx.arc(
+          -outterRadius,
+          0,
+          outterLineWidth / 2,
+          degToRad(0),
+          degToRad(360)
+        );
+        ctx.strokeStyle = pointerColor;
+        ctx.lineWidth = 8;
+        ctx.lineCap = "butt";
+        ctx.fillStyle = "#FFFFFF";
+        ctx.closePath();
+        ctx.stroke();
+        ctx.fill();
+        ctx.restore();
+
+        // 文字 - x条
+        ctx.textAlign = "center";
+        ctx.fillStyle = pointerColor;
+        ctx.font = "22px sans-serif";
+        ctx.fillText(`${10}条`, 0, -5);
+
+        // 文字 - 通过
+        ctx.textAlign = "right";
+        ctx.fillStyle = "#A4A4A4";
+        ctx.font = "22px sans-serif";
+        ctx.fillText("开始", -outterRadius - 15, -5);
+
+        // 文字 - 复议
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#A4A4A4";
+        ctx.font = "22px sans-serif";
+        ctx.fillText("中间", 0, -(outterRadius + outterLineWidth));
+
+        // 文字 - 拒绝
+        ctx.textAlign = "left";
+        ctx.fillStyle = "#A4A4A4";
+        ctx.font = "22px sans-serif";
+        ctx.fillText("结束", outterRadius + 15, -5);
+      }
+
+      let progress = -180;
+      function start() {
+        if (progress < 0) {
+          ctx.clearRect(-centerX, -centerY, canvasWidth, canvasHeigth);
+          progress++;
+          draw(progress);
+          window.requestAnimationFrame(start);
+        }
+      }
+      start();
+    </script>
+  </body>
+</html>
